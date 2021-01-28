@@ -1,17 +1,23 @@
-import React from 'react';
-import ReactDOM from 'react-dom';
-import './index.css';
-import App from './App';
-import reportWebVitals from './reportWebVitals';
+import React, { Component } from "react";
+import { render } from "react-dom";
 
-ReactDOM.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-  document.getElementById('root')
-);
+import { Box, Grommet, Heading } from "grommet";
+import { grommet } from "grommet/themes";
+import { Distribution } from "./components/Distribution";
 
-// If you want to start measuring performance in your app, pass a function
-// to log results (for example: reportWebVitals(console.log))
-// or send to an analytics endpoint. Learn more: https://bit.ly/CRA-vitals
-reportWebVitals();
+
+
+class App extends Component {
+    render() {
+        return (
+            <Grommet theme={grommet}>
+                <Box align="center" pad="large">
+                    <Heading level="3">Realtime Component LP rewards distribution</Heading>
+                </Box>
+                <Distribution />
+            </Grommet>
+        );
+    }
+}
+
+render(<App />, document.getElementById("root"));
