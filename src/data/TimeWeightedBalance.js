@@ -1,4 +1,7 @@
 /* global BigInt */
+
+export const NUMERATOR = BigInt(1e18)
+
 export default class TimeWeightedBalance {
     lastSeen;
     current;
@@ -10,8 +13,8 @@ export default class TimeWeightedBalance {
         this.lastSeen = startBlockNumber
     }
 
-    add(amount, now) {
-        this._update(amount, now);
+    add(amount, now, supply) {
+        this._update(supply, now);
         this.current += amount
     }
 
@@ -25,22 +28,22 @@ export default class TimeWeightedBalance {
         this.current -= amount
     }
 
-    sub(amount, now) {
-        this._update(amount, now);
+    sub(amount, now, supply) {
+        this._update(supply, now);
         this.current -= amount
     }
 
-    _update(amount, now) {
+    _update(supply, now) {
         if (now < this.lastSeen) {
             throw new Error("downTime")
         }
         const timePast = now - this.lastSeen;
-        this.acc += this.current * BigInt(timePast)
+        this.acc += (this.current * NUMERATOR / supply) * BigInt(timePast)
         this.lastSeen = now
     }
 
-    finalize(now) {
+    finalize(now, supply) {
         const timePast = now - this.lastSeen;
-        return this.acc + this.current * BigInt(timePast)
+        return this.acc + (this.current * NUMERATOR / supply) * BigInt(timePast)
     }
 }
