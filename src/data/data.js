@@ -7,9 +7,7 @@ import { BehaviorSubject } from 'rxjs'
 
 const isDev = process.env.NODE_ENV === 'development'
 const apiKey = isDev ? 'db72eb2275564c62bfa71896870d8975' : '3c3dfdec6ce94abc935977aa995d1a8c'
-export const web3 = new Web3(`https://mainnet.infura.io/v3/${apiKey}`)
-
-export let data = []
+export const web3 = new Web3(`wss://mainnet.infura.io/ws/v3/${apiKey}`)
 
 const dataStore = {
     distribution: new BehaviorSubject([]),
@@ -18,7 +16,6 @@ const dataStore = {
         dataStore.distribution.next(balances)
     },
 }
-
 
 const TRANSFER_HASH = web3.utils.sha3('Transfer(address,address,uint256)');
 const POOL = '0x49519631B404E06ca79C9C7b0dC91648D86F08db'
@@ -34,7 +31,7 @@ const initialize = () => _.once(async () => {
     await fetchInitialData();
     await fetchDistributionData(currentBlockNumber);
     console.timeEnd('distr')
-
+    subcribeToEvents()
 })()
 
 async function fetchInitialData() {
@@ -93,17 +90,33 @@ async function fetchInitialData() {
     })
 }
 
-async function fetchDistributionData(endBlock) {
+async function fetchDistributionData(endBlockNumber) {
+
     const logs = await web3.eth.getPastLogs({
         fromBlock: STARTED_BLOCK,
-        toBlock: endBlock,
+        toBlock: endBlockNumber,
         address: POOL,
         topics: [TRANSFER_HASH]
     })
+
     logs.forEach(l => applyLog(l))
-    const balances = calculateDistribution(endBlock)
-    console.log(balances.reduce((acc, { distributionPercent }) => acc + distributionPercent, 0))
-    dataStore.setBalances(balances.map((d, i) => ({...d, id: i+1})))
+
+    finalize(endBlockNumber)
+
+}
+
+function finalize(endBlockNumber) {
+
+    const balances = calculateDistribution(endBlockNumber)
+
+    dataStore.setBalances(
+        balances.map(
+            (d, i) => ({...d, id: i+1})
+        )
+    )
+
+    console.log('updated', endBlockNumber)
+
 }
 
 function calculateDistribution(endBlock) {
@@ -111,9 +124,6 @@ function calculateDistribution(endBlock) {
     const supply = TOTAL_SUPPLY.current
     return Array.from(USER_STATES.entries()).map(([addr, bal]) => ({
         address: addr,
-        // lastSeen: bal.lastSeen,
-        // current: bal.current,
-        // acc: bal.finalize(endBlock),
         distributionPercent: Number(bal.finalize(endBlock, supply) * BigInt(1_000_000) / proportionTimeTotal) / 10000,
     })).sort(({ distributionPercent: a }, { distributionPercent: b }) => {
         if (a < b) return 1
@@ -194,6 +204,31 @@ function mint(amount, now) {
 }
 
 initialize();
+
+function subcribeToEvents() {
+    let finalization = false
+    web3.eth.subscribe("newBlockHeaders", (error, event) => {
+        if (!error && !finalization) {
+            finalization = true
+            finalize(event.number)
+            finalization = false
+        }
+    })
+    web3.eth.subscribe('logs', {
+        address: POOL,
+        topics: [TRANSFER_HASH]
+    }, (error, log ) => {
+        if (!error) {
+            applyLog(log)
+            if (!finalization) {
+                finalization = true
+                finalize(log.blockNumber)
+                finalization = false
+            }
+        }
+    })
+}
+
 
 export default dataStore
 
