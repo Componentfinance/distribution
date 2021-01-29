@@ -8,6 +8,7 @@ import { BehaviorSubject } from 'rxjs'
 const isDev = process.env.NODE_ENV === 'development'
 const apiKey = isDev ? 'db72eb2275564c62bfa71896870d8975' : '3c3dfdec6ce94abc935977aa995d1a8c'
 export const web3 = new Web3(`wss://mainnet.infura.io/ws/v3/${apiKey}`)
+const animals = ['🦆', '🐱', '🦁', '🦕', '🦍', '🦄', '🐊', '🐸', '🐛', '🐜', '🦐', '🦋', '🪰', '🪱', '🌱', '☃️', '🪨'];
 
 const dataStore = {
     distribution: new BehaviorSubject([]),
@@ -116,7 +117,10 @@ function finalize(endBlockNumber) {
 
     dataStore.setBalances(
         balances.map(
-            (d, i) => ({...d, id: i+1})
+            (d, i) => ({
+                    ...d,
+                    id: animals[i] ?? i + 1,
+                })
         )
     )
 
@@ -125,8 +129,11 @@ function finalize(endBlockNumber) {
 }
 
 function calculateDistribution(endBlock) {
+
     const proportionTimeTotal = BigInt(endBlock - STARTED_BLOCK) * NUMERATOR
+
     const supply = TOTAL_SUPPLY.current
+
     return Array.from(USER_STATES.entries()).map(([addr, bal]) => ({
         address: addr,
         distributionPercent: Number(bal.finalize(endBlock, supply) * BigInt(1_000_000) / proportionTimeTotal) / 10000,
@@ -142,7 +149,6 @@ function applyLog(log) {
     const to = `0x${log.topics[2].substr(26)}`
     const amount = BigInt(log.data)
     const now = log.blockNumber
-
 
     const prevSupply = TOTAL_SUPPLY.current
 
