@@ -3,6 +3,7 @@ import React from "react";
 import {Box, DataTable, Meter, Stack, Text} from "grommet";
 import dataStore from "../data/data";
 import useSubject from "../data/useSubject";
+import { isMobile } from "react-device-detect";
 
 export const Distribution = () => {
     const balances = useSubject(dataStore.distribution)
@@ -19,10 +20,10 @@ export const Distribution = () => {
                 {
                     property: 'address',
                     header: <Text>Address</Text>,
-                    render: datum => <Text style={{ fontFamily: 'monospace' }}>{datum.address}</Text>,
+                    render: datum => <Text style={{ fontFamily: 'monospace', fontSize: isMobile ? "8px" : '12px' }}>{datum.address}</Text>,
                 },
                 {
-                    property: 'destribution',
+                    property: 'distribution',
                     header: 'Distribution',
                     render: datum => (
                         <Stack anchor="center">
