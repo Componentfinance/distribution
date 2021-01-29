@@ -11,9 +11,14 @@ export const web3 = new Web3(`wss://mainnet.infura.io/ws/v3/${apiKey}`)
 
 const dataStore = {
     distribution: new BehaviorSubject([]),
+    blockNumber: new BehaviorSubject(''),
 
     setBalances(balances) {
         dataStore.distribution.next(balances)
+    },
+
+    setBlockNumber(blockNumber) {
+        dataStore.blockNumber.next(blockNumber)
     },
 }
 
@@ -115,7 +120,7 @@ function finalize(endBlockNumber) {
         )
     )
 
-    console.log('updated', endBlockNumber)
+    dataStore.setBlockNumber(endBlockNumber)
 
 }
 
