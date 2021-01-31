@@ -21,7 +21,7 @@ class App extends Component {
                 <Styled>
                     <Head />
                     <Box align="center" pad={{ bottom:"large" }}>
-                        <Heading level="3">Realtime Component LP rewards distribution</Heading>
+                        <Heading level="3">Component LP rewards distribution</Heading>
                     </Box>
                     <Distribution />
                 </Styled>

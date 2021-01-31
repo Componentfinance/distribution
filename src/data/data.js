@@ -12,6 +12,7 @@ const animals = ['🦆', '🐱', '🦁', '🦕', '🦍', '🦄', '🐊', '🐸',
 
 const dataStore = {
     distribution: new BehaviorSubject([]),
+    totalStake: new BehaviorSubject(BigInt(1)),
     blockNumber: new BehaviorSubject(''),
 
     setBalances(balances) {
@@ -20,6 +21,10 @@ const dataStore = {
 
     setBlockNumber(blockNumber) {
         dataStore.blockNumber.next(blockNumber)
+    },
+
+    setTotalStake(amount) {
+        dataStore.totalStake.next(amount)
     },
 }
 
@@ -36,6 +41,7 @@ const initialize = () => _.once(async () => {
     const currentBlockNumber = await web3.eth.getBlockNumber();
     await fetchInitialData();
     await fetchDistributionData(currentBlockNumber);
+    dataStore.setTotalStake(TOTAL_SUPPLY.current)
     console.timeEnd('distr')
     subcribeToEvents()
 })()
@@ -136,6 +142,7 @@ function calculateDistribution(endBlock) {
 
     return Array.from(USER_STATES.entries()).map(([addr, bal]) => ({
         address: addr,
+        currentStake: bal.current,
         distributionPercent: Number(bal.finalize(endBlock, supply) * BigInt(1_000_000) / proportionTimeTotal) / 10000,
     })).sort(({ distributionPercent: a }, { distributionPercent: b }) => {
         if (a < b) return 1
@@ -208,10 +215,14 @@ function rebalance(supply, now, excludedAddr) {
 
 function burn(amount, now) {
     TOTAL_SUPPLY._sub(amount, now)
+    if (dataStore.distribution.getValue().length)
+        dataStore.setTotalStake(TOTAL_SUPPLY.current)
 }
 
 function mint(amount, now) {
     TOTAL_SUPPLY._add(amount, now)
+    if (dataStore.distribution.getValue().length)
+        dataStore.setTotalStake(TOTAL_SUPPLY.current)
 }
 
 initialize();
