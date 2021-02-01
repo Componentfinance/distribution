@@ -29,12 +29,24 @@ const dataStore = {
 }
 
 const TRANSFER_HASH = web3.utils.sha3('Transfer(address,address,uint256)');
-const POOL = '0x49519631B404E06ca79C9C7b0dC91648D86F08db'
+
+const POOLS = {
+    '0x49519631b404e06ca79c9c7b0dc91648d86f08db': {
+        startedBlock: 11_731_951,
+        createdBlock: 11_717_846,
+    },
+    '0x6477960dd932d29518d7e8087d5ea3d11e606068': {
+        startedBlock: 11_772_123,
+        createdBlock: 11_759_920,
+    },
+}
+
 const ZERO_ADDRESS = '0x' + '0'.repeat(40)
-const STARTED_BLOCK = 11_731_951;
-const CREATED_BLOCK = 11_717_846;
 const USER_STATES = new Map()
-const TOTAL_SUPPLY = new TimeWeightedBalance(BigInt(0), STARTED_BLOCK);
+const STAKING_STARTED_AT_BLOCK = Math.min(..._.values(POOLS).map(({ startedBlock }) => startedBlock))
+const TOTAL_SUPPLY = new TimeWeightedBalance(BigInt(0), STAKING_STARTED_AT_BLOCK);
+const INITIAL_SUPPLY_STATES = {}
+const INITIAL_USER_STATES = {}
 
 const initialize = () => _.once(async () => {
     console.time('distr')
@@ -47,69 +59,107 @@ const initialize = () => _.once(async () => {
 })()
 
 async function fetchInitialData() {
-    const logs = await web3.eth.getPastLogs({
-        fromBlock: CREATED_BLOCK,
-        toBlock: STARTED_BLOCK,
-        address: POOL,
-        topics: [TRANSFER_HASH]
-    })
-    logs.forEach(l => {
+    for (const poolAddress in POOLS) {
+        const pool = POOLS[poolAddress]
+        INITIAL_SUPPLY_STATES[poolAddress] = BigInt(0);
+        INITIAL_USER_STATES[poolAddress] = new Map();
 
-        const from = `0x${l.topics[1].substr(26)}`
-        const to = `0x${l.topics[2].substr(26)}`
-        const amount = BigInt(l.data)
+        const _users = INITIAL_USER_STATES[poolAddress]
 
-        if (from === ZERO_ADDRESS) {
+        const logs = await web3.eth.getPastLogs({
+            fromBlock: pool.createdBlock,
+            toBlock: pool.startedBlock,
+            address: poolAddress,
+            topics: [TRANSFER_HASH]
+        })
 
-            TOTAL_SUPPLY._add(amount, STARTED_BLOCK)
 
-            const toUser = USER_STATES.get(to)
-            if (toUser) {
-                toUser._add(amount, STARTED_BLOCK)
+        logs.forEach(l => {
+
+            const from = `0x${l.topics[1].substr(26)}`
+            const to = `0x${l.topics[2].substr(26)}`
+            const amount = BigInt(l.data)
+
+            if (from === ZERO_ADDRESS) {
+
+                INITIAL_SUPPLY_STATES[poolAddress] += amount
+
+                const toUserBalance = _users.get(to)
+                if (toUserBalance) {
+                    _users.set(to, toUserBalance + amount)
+                } else {
+                    _users.set(to, amount)
+                }
+
+            } else if (to === ZERO_ADDRESS) {
+
+                INITIAL_SUPPLY_STATES[poolAddress] -= amount
+
+                const fromUserBalance = _users.get(from)
+                if (fromUserBalance) {
+                    _users.set(from, fromUserBalance - amount)
+                } else {
+                    throw new Error("from unknown")
+                }
+
             } else {
-                USER_STATES.set(to, new TimeWeightedBalance(amount, STARTED_BLOCK))
+
+                const fromUserBalance = _users.get(from)
+
+                if (fromUserBalance) {
+                    _users.set(from, fromUserBalance - amount)
+                } else {
+                    throw new Error("from unknown")
+                }
+
+                const toUserBalance = _users.get(to)
+                if (toUserBalance) {
+                    _users.set(to, toUserBalance + amount)
+                } else {
+                    _users.set(to, amount)
+                }
+
             }
 
-        } else if (to === ZERO_ADDRESS) {
+        })
+    }
 
-            TOTAL_SUPPLY._sub(amount, STARTED_BLOCK)
-
-            const fromUser = USER_STATES.get(from)
-            if (fromUser) {
-                fromUser._sub(amount, STARTED_BLOCK)
-            } else {
-                throw new Error("from unknown")
-            }
-
-        } else {
-
-            const fromUser = USER_STATES.get(from)
-            if (fromUser) {
-                fromUser._sub(amount, STARTED_BLOCK)
-            } else {
-                throw new Error("from unknown")
-            }
-
-            const toUser = USER_STATES.get(to)
-            if (toUser) {
-                toUser._add(amount, STARTED_BLOCK)
-            } else {
-                USER_STATES.set(to, new TimeWeightedBalance(amount, STARTED_BLOCK))
-            }
-
-        }
-
-    })
+    const initialPoolAddress = _.keys(POOLS)[0]
+    TOTAL_SUPPLY._add(INITIAL_SUPPLY_STATES[initialPoolAddress])
+    delete INITIAL_SUPPLY_STATES[initialPoolAddress]
+    for (const userAddress of Array.from(INITIAL_USER_STATES[initialPoolAddress].keys())) {
+        USER_STATES.set(userAddress, new TimeWeightedBalance(INITIAL_USER_STATES[initialPoolAddress].get(userAddress), POOLS[initialPoolAddress].startedBlock))
+        INITIAL_USER_STATES[initialPoolAddress].delete(userAddress)
+    }
+    delete INITIAL_USER_STATES[initialPoolAddress]
 }
 
 async function fetchDistributionData(endBlockNumber) {
 
-    const logs = await web3.eth.getPastLogs({
-        fromBlock: STARTED_BLOCK,
+    const promises = _.keys(POOLS).map(poolAddress => web3.eth.getPastLogs({
+        fromBlock: POOLS[poolAddress].startedBlock,
         toBlock: endBlockNumber,
-        address: POOL,
+        address: poolAddress,
         topics: [TRANSFER_HASH]
-    })
+    }))
+
+
+    const logs = _.flatten(await Promise.all(promises))
+        .sort((a, b) => {
+            if (a.blockNumber > b.blockNumber) {
+                return 1
+            }
+            if (a.blockNumber < b.blockNumber) {
+                return -1
+            }
+            if (a.logIndex > b.logIndex) {
+                return 1
+            }
+            if (a.logIndex < b.logIndex) {
+                return -1
+            }
+            throw new Error("Impossible case: the same logIndex")
+        });
 
     logs.forEach(l => applyLog(l))
 
@@ -136,7 +186,7 @@ function finalize(endBlockNumber) {
 
 function calculateDistribution(endBlock) {
 
-    const proportionTimeTotal = BigInt(endBlock - STARTED_BLOCK) * NUMERATOR
+    const proportionTimeTotal = BigInt(endBlock - STAKING_STARTED_AT_BLOCK) * NUMERATOR
 
     const supply = TOTAL_SUPPLY.current
 
@@ -157,6 +207,38 @@ function applyLog(log) {
     const amount = BigInt(log.data)
     const now = log.blockNumber
 
+    for (const uninitializedPoolAddress in INITIAL_SUPPLY_STATES) {
+
+        const { startedBlock } = POOLS[uninitializedPoolAddress]
+
+        if (now > startedBlock) {
+
+            const prevSupply = TOTAL_SUPPLY.current
+
+            // apply pool initial state
+            mint(INITIAL_SUPPLY_STATES[uninitializedPoolAddress], startedBlock)
+
+            const excludeAddresses = []
+
+            for (const userAddress of Array.from(INITIAL_USER_STATES[uninitializedPoolAddress].keys())) {
+                const amount = INITIAL_USER_STATES[uninitializedPoolAddress].get(userAddress)
+                const toUser = USER_STATES.get(userAddress)
+                if (toUser) {
+                    toUser.add(amount, now, prevSupply)
+                } else {
+                    USER_STATES.set(userAddress, new TimeWeightedBalance(amount, startedBlock))
+                }
+                INITIAL_USER_STATES[uninitializedPoolAddress].delete(userAddress)
+                excludeAddresses.push(userAddress)
+            }
+
+            delete INITIAL_SUPPLY_STATES[uninitializedPoolAddress]
+            delete INITIAL_USER_STATES[uninitializedPoolAddress]
+            rebalance(prevSupply, startedBlock, excludeAddresses)
+        }
+
+    }
+
     const prevSupply = TOTAL_SUPPLY.current
 
     if (from === ZERO_ADDRESS) {
@@ -170,7 +252,7 @@ function applyLog(log) {
             USER_STATES.set(to, new TimeWeightedBalance(amount, now))
         }
 
-        rebalance(prevSupply, now, [toUser])
+        rebalance(prevSupply, now, [to])
 
     } else if (to === ZERO_ADDRESS) {
 
@@ -183,7 +265,7 @@ function applyLog(log) {
             throw new Error("from unknown")
         }
 
-        rebalance(prevSupply, now, [fromUser])
+        rebalance(prevSupply, now, [from])
 
     } else {
 
@@ -225,30 +307,24 @@ function mint(amount, now) {
         dataStore.setTotalStake(TOTAL_SUPPLY.current)
 }
 
-initialize();
+initialize()
 
 function subcribeToEvents() {
-    let finalization = false
     web3.eth.subscribe("newBlockHeaders", (error, event) => {
-        if (!error && !finalization) {
-            finalization = true
+        if (!error) {
             finalize(event.number)
-            finalization = false
         }
     })
+    _.keys(POOLS).forEach(poolAddress =>
     web3.eth.subscribe('logs', {
-        address: POOL,
+        address: poolAddress,
         topics: [TRANSFER_HASH]
     }, (error, log ) => {
         if (!error) {
             applyLog(log)
-            if (!finalization) {
-                finalization = true
-                finalize(log.blockNumber)
-                finalization = false
-            }
+            finalize(log.blockNumber)
         }
-    })
+    }))
 }
 
 
