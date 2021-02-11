@@ -10,7 +10,7 @@ import "normalize.css/normalize.css";
 
 
 const Styled = styled.div`
-  background: radial-gradient(circle at top, #fff -0%, rgb(242, 193, 241), rgba(203, 0, 255, 0.18));
+  background: radial-gradient(circle at top, #fff -0%, rgb(242, 193, 241), rgba(203, 0, 255, 0.18)) fixed;
   min-height: 100vh;
 `
 
@@ -20,7 +20,7 @@ class App extends Component {
             <Grommet theme={grommet}>
                 <Styled>
                     <Head />
-                    <Box align="center" pad={{ bottom:"large" }}>
+                    <Box align="center" pad="none">
                         <Heading level="3">Component LP rewards distribution</Heading>
                     </Box>
                     <Distribution />

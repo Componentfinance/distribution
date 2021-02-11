@@ -1,11 +1,12 @@
 /* global BigInt */
-import React from "react";
+import React, {useState, useMemo} from "react";
 
-import {Box, DataTable, Meter, Stack, Text } from "grommet";
+import {Box, DataTable, Meter, Stack, Text, TextInput} from 'grommet';
 import dataStore from "../data/data";
 import useSubject from "../data/useSubject";
 import { isMobile } from "react-device-detect";
 import Spinner from "./Spinner";
+import {DataTableCustom} from './DistributionStyled.js';
 
 export function formatNumber(x) {
     if (x > 1_000_000) {
@@ -27,14 +28,28 @@ export function formatNumber(x) {
 export const Distribution = () => {
     const balances = useSubject(dataStore.distribution)
     const totalStake = useSubject(dataStore.totalStake)
+    const [searchPhrase, setSearchPhrase] = useState('');
+    const filteredBalances = useMemo(() => {
+        if (searchPhrase)
+            return balances.filter((balance) => {
+                return balance.address.toLowerCase().includes(searchPhrase.toLowerCase());
+            });
+        else return balances;
+    }, [searchPhrase, balances]);
+
+
     if (!balances.length) {
         return <Spinner />
     }
 
     return (
-        <Box align='center'>
-            <DataTable
-            columns={[
+        <Box align='center' style={{maxWidth: '950px', margin: '0 auto'}}>
+            <Box pad="medium" style={{width: '100%'}}>
+                <TextInput onInput={(e) => setSearchPhrase(e.target.value)} placeholder="Search by address"/>
+            </Box>
+            <DataTableCustom
+              data={filteredBalances}
+              columns={[
                 {
                     property: 'id',
                     header: <Text>#</Text>,
@@ -44,7 +59,7 @@ export const Distribution = () => {
                     property: 'address',
                     header: <Text>Address</Text>,
                     render: datum =>
-                            <Text style={{ fontFamily: 'monospace', fontSize: isMobile ? "8px" : '12px' }}>{datum.address}</Text>
+                            <Text style={{ fontFamily: 'monospace', fontSize: '11px' }}>{datum.address}</Text>
                     ,
                 },
                 {
@@ -75,11 +90,10 @@ export const Distribution = () => {
                                 </Box>
                             </Stack>
                         )
-                }
+                    }
                 },
-            ]}
-            data={balances}
-        />
+              ]}
+            />
         </Box>
     )
 }
