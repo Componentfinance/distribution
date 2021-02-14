@@ -3,7 +3,6 @@ import { render } from "react-dom";
 import styled from 'styled-components'
 
 import { Box, Grommet, Heading } from "grommet";
-import { grommet } from "grommet/themes";
 import { Distribution } from "./components/Distribution";
 import { Head } from "./components/Head";
 import "normalize.css/normalize.css";
@@ -14,16 +13,78 @@ const Styled = styled.div`
   min-height: 100vh;
 `
 
+const myTheme = {
+    table: {
+        header: {
+            border: false,
+        },
+    },
+    textInput: {
+        extend: 'padding: 11px 0 11px 18px',
+    },
+    text: {
+        medium: {
+            size: '22px',
+        },
+    },
+    global: {
+        drop: {
+            background: '#fcefff',
+        },
+        control: {
+            border: {
+                color: '#a33ce7',
+            },
+        },
+        focus: {
+            border: {
+                color: 'rgb(172, 12, 238)',
+            },
+        },
+        font: {
+            // family: 'Metric, Arial, sans-serif;',
+            family: 'monospace',
+            face: `
+          @font-face {
+            font-family: "Metric";
+            src: url("https://hpefonts.s3.amazonaws.com/web/MetricHPE-Web-Regular.woff") format('woff');
+          }
+          @font-face {
+            font-family: "Metric";
+            src: url("https://hpefonts.s3.amazonaws.com/web/MetricHPE-Web-Bold.woff") format('woff');
+            font-weight: 700;
+          }
+          @font-face {
+            font-family: "Metric";
+            src: url("https://hpefonts.s3.amazonaws.com/web/MetricHPE-Web-Semibold.woff") format('woff');
+            font-weight: 600;
+          }
+          @font-face {
+            font-family: "Metric";
+            src: url("https://hpefonts.s3.amazonaws.com/web/MetricHPE-Web-Light.woff") format('woff');
+            font-weight: 100;
+          }
+        `,
+        },
+        colors: {
+            brand: 'rgb(172, 12, 238)',
+            placeholder: 'rgba(203,0,255,0.3)'
+        },
+    },
+}
+
 class App extends Component {
     render() {
         return (
-            <Grommet theme={grommet}>
+            <Grommet  theme={myTheme}>
                 <Styled>
-                    <Head />
-                    <Box align="center" pad="none">
-                        <Heading level="3">Component LP rewards distribution</Heading>
-                    </Box>
-                    <Distribution />
+                    <div style={{maxWidth: '950px', margin: '0 auto'}}>
+                        <Head />
+                        <Box align="center" pad="small">
+                            <Heading level="2" style={{marginBottom: '10px'}}>Component LP rewards distribution</Heading>
+                        </Box>
+                        <Distribution />
+                    </div>
                 </Styled>
             </Grommet>
         );
