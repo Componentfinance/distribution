@@ -2,7 +2,7 @@ import styled from 'styled-components';
 import {DataTable} from 'grommet';
 
 export const DataTableCustom = styled(DataTable)`
-  width: 100%;
+  min-width: 100%;
   margin: 0 auto;
   thead {
     font-weight: bold;
