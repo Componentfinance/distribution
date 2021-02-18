@@ -3,7 +3,7 @@ import React, {useState, useMemo} from "react";
 
 import Arrow from '../up-arrow.svg'
 
-import {Box, DataTable, Meter, Stack, Text, TextInput} from 'grommet';
+import {Box, Meter, Stack, Text, TextInput} from 'grommet';
 import dataStore from "../data/data";
 import useSubject from "../data/useSubject";
 import Spinner from "./Spinner";
@@ -102,7 +102,7 @@ export const Distribution = () => {
                           return (
                             <Box direction="row" align="center" pad={{bottom: 'xsmall'}}>
                                 <Text size="xlarge">
-                                    {datum.distributionPercent}
+                                    {datum.distributionPercent.toFixed(4)}
                                 </Text>
                                 <Box direction="row" align="center">
                                     <Text>{'\u00A0'}%</Text>

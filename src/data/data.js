@@ -193,7 +193,7 @@ function calculateDistribution(endBlock) {
     return Array.from(USER_STATES.entries()).map(([addr, bal]) => ({
         address: addr,
         currentStake: bal.current,
-        distributionPercent: (Number(bal.finalize(endBlock, supply) * BigInt(1_000_000) / proportionTimeTotal) / 10000).toFixed(4),
+        distributionPercent: (Number(bal.finalize(endBlock, supply) * BigInt(1_000_000) / proportionTimeTotal) / 10000),
     })).sort(({ distributionPercent: a }, { distributionPercent: b }) => {
         if (a < b) return 1
         if (a > b) return -1
