@@ -28,10 +28,26 @@ export function formatNumber(x) {
     return y.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
 
-const StyledTip = styled(Tip)`
-  background: #fff;
-  text-align: center;
+const StyledText = styled(Text)`
+  display: flex;
+  align-items: center;
+  img {
+    opacity: 0;
+    @media screen and (max-width: 600px) {
+      opacity: 1;
+    }
+  }
+  :hover {
+    img {
+      opacity: 1;
+    }
+  }
+  @media screen and (max-width: 600px) {
+    justify-content: center;
+  }
 `;
+
+const copyIcon = `${process.env.PUBLIC_URL}/ic-copy.svg`;
 
 export const Distribution = () => {
     const balances = useSubject(dataStore.distribution)
@@ -86,11 +102,12 @@ export const Distribution = () => {
                         onCopy={() => setCopied(true)}
                       >
 
-                          <Text>
-                            <StyledTip content={copied ? 'Copied' : 'Copy'} dropProps={{stretch: false,}}>
+                          <StyledText>
+                            <>
                               <span>{datum.address.substring(0, 8)}...{datum.address.substring(36)}</span>
-                            </StyledTip>
-                          </Text>
+                              <img src={copyIcon} style={{ marginLeft: '10px', width: '15px'}}/>
+                            </>
+                          </StyledText>
                       </CopyToClipboard>
                     ,
                     sortable: false,

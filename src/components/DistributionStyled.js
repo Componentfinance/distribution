@@ -20,6 +20,8 @@ export const DataTableCustom = styled(DataTable)`
     td:nth-child(2) {
       flex-grow: 1;
       text-align: center;
+      padding-left: 0;
+      padding-right: 0;
       span {
         font-size: 15px;
       }
