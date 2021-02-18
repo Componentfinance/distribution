@@ -3,11 +3,13 @@ import React, {useState, useMemo} from "react";
 
 import Arrow from '../up-arrow.svg'
 
-import {Box, Meter, Stack, Text, TextInput} from 'grommet';
+import {Box, Meter, Stack, Text, TextInput, Tip} from 'grommet';
 import dataStore from "../data/data";
 import useSubject from "../data/useSubject";
 import Spinner from "./Spinner";
 import {DataTableCustom} from './DistributionStyled.js';
+import {CopyToClipboard} from 'react-copy-to-clipboard';
+import styled from 'styled-components';
 
 export function formatNumber(x) {
     if (x > 1_000_000) {
@@ -26,10 +28,21 @@ export function formatNumber(x) {
     return y.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
 
+const StyledTip = styled(Tip)`
+  background: #fff;
+  text-align: center;
+`;
+
 export const Distribution = () => {
     const balances = useSubject(dataStore.distribution)
     const totalStake = useSubject(dataStore.totalStake)
     const [searchPhrase, setSearchPhrase] = useState('');
+    const [copied, setCopied] = useState(false);
+
+    React.useEffect(() => {
+      if (copied) setTimeout(() => setCopied(false), 1000)
+    }, [copied])
+
     const filteredBalances = useMemo(() => {
         if (searchPhrase)
             return balances.filter((balance) => {
@@ -55,26 +68,39 @@ export const Distribution = () => {
             </Box>
             <DataTableCustom
               data={filteredBalances}
+              sortable
               columns={[
                 {
                     property: 'id',
                     header: <Text>👑</Text>,
                     primary: true,
+                    sortable: false,
                 },
                 {
                     property: 'address',
                     header: <Text>Address</Text>,
                     render: datum =>
-                      <Text>
-                          {datum.address.substring(0, 8)}...{datum.address.substring(36)}
-                      </Text>
+                      <CopyToClipboard
+                        text={datum.address}
+                        style={{cursor: 'pointer'}}
+                        onCopy={() => setCopied(true)}
+                      >
+
+                          <Text>
+                            <StyledTip content={copied ? 'Copied' : 'Copy'} dropProps={{stretch: false,}}>
+                              <span>{datum.address.substring(0, 8)}...{datum.address.substring(36)}</span>
+                            </StyledTip>
+                          </Text>
+                      </CopyToClipboard>
                     ,
+                    sortable: false,
                 },
                 {
                     property: 'currentStake',
                     header: <Text>Current stake</Text>,
                     render: datum =>
                             <Text>{formatNumber(Number(datum.currentStake / BigInt(10 ** 18)))}</Text>,
+                    sortable: true,
                 },
                 {
                     property: 'distributionLine',
@@ -92,7 +118,8 @@ export const Distribution = () => {
                                 </Box>
                             </Stack>
                         )
-                    }
+                    },
+                    sortable: false,
                 },
                   {
                       property: 'distributionPercent',
@@ -112,7 +139,8 @@ export const Distribution = () => {
                                 </Box>
                             </Box>
                           )
-                      }
+                      },
+                      sortable: true,
                   }
               ]}
             />

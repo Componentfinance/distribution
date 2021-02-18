@@ -14,6 +14,12 @@ const Styled = styled.div`
 `
 
 const myTheme = {
+    tip: {
+      content: {
+        background: '#fff',
+      },
+      extend: 'text-align: center',
+    },
     table: {
         header: {
             border: false,
