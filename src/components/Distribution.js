@@ -98,14 +98,16 @@ export const Distribution = () => {
                     render: datum =>
                       <CopyToClipboard
                         text={datum.address}
-                        style={{cursor: 'pointer'}}
+                        style={{cursor: 'copy'}}
                         onCopy={() => setCopied(true)}
                       >
 
                           <StyledText>
                             <>
                               <span>{datum.address.substring(0, 8)}...{datum.address.substring(36)}</span>
-                              <img src={copyIcon} style={{ marginLeft: '10px', width: '15px'}}/>
+                                <Tip content={copied ? <Text size='small'>Copied</Text>: <Text size='small'>&nbsp;Copy&nbsp;</Text>}>
+                                    <img alt='' src={copyIcon} style={{ marginLeft: '10px', width: '15px'}}/>
+                                </Tip>
                             </>
                           </StyledText>
                       </CopyToClipboard>
@@ -151,7 +153,7 @@ export const Distribution = () => {
                                 <Box direction="row" align="center">
                                     <Text>{'\u00A0'}%</Text>
                                     <span style={{ marginLeft: '10px' }}>
-                                        {currentDistributionPercent > datum.distributionPercent ? <img src={Arrow} style={{ display: 'block', width: '15px'}}/> : <img src={Arrow} style={{ transform: 'rotate(180deg)', display: 'block', width: '15px'}}/>}
+                                        {currentDistributionPercent > datum.distributionPercent ? <img alt='' src={Arrow} style={{ display: 'block', width: '15px'}}/> : <img alt='' src={Arrow} style={{ transform: 'rotate(180deg)', display: 'block', width: '15px'}}/>}
                                     </span>
                                 </Box>
                             </Box>
