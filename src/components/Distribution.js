@@ -51,6 +51,8 @@ const copyIcon = `${process.env.PUBLIC_URL}/ic-copy.svg`;
 
 export const Distribution = () => {
     const balances = useSubject(dataStore.distribution)
+    const errorInfo = useSubject(dataStore.error)
+    const stage = useSubject(dataStore.stage)
     const totalStake = useSubject(dataStore.totalStake)
     const [searchPhrase, setSearchPhrase] = useState('');
     const [copied, setCopied] = useState(false);
@@ -72,19 +74,22 @@ export const Distribution = () => {
       [filteredBalances]
     );
 
-
     if (!balances.length) {
         return (
 
             <Box align='center' style={{margin: '0 auto'}}>
                 <span style={{marginBottom:'20px'}}>Fetching data, please wait ~1 min</span>
+                <span style={{marginBottom:'20px'}}>{stage}...</span>
                 <Spinner/>
             </Box>
         )
     }
 
+    const errorFragment = errorInfo ? <span style={{marginBottom:'20px'}}>{errorInfo}</span> : <></>
+
     return (
         <Box align='center' style={{margin: '0 auto'}}>
+            {errorFragment}
             <Box pad="small" style={{width: '100%', maxWidth: '925px', marginRight: 'auto'}}>
                 <TextInput onInput={(e) => setSearchPhrase(e.target.value)} placeholder="Search by address"/>
             </Box>

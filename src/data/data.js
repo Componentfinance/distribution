@@ -21,7 +21,9 @@ const explorerUrls = {
 const dataStore = {
     distribution: new BehaviorSubject([]),
     totalStake: new BehaviorSubject(BigInt(1)),
+    error: new BehaviorSubject(null),
     time: new BehaviorSubject(''),
+    stage: new BehaviorSubject(''),
 
     setBalances(balances) {
         dataStore.distribution.next(balances)
@@ -33,6 +35,14 @@ const dataStore = {
 
     setTotalStake(amount) {
         dataStore.totalStake.next(amount)
+    },
+
+    setError(error) {
+        dataStore.error.next(error)
+    },
+
+    setStage(stage) {
+        dataStore.stage.next(stage)
     },
 }
 
@@ -76,33 +86,29 @@ const initialize = () => _.once(async () => {
 })()
 
 async function fetchInitialData() {
+
     for (const poolAddress in POOLS) {
         const pool = POOLS[poolAddress]
+        dataStore.setStage(`Fetching initial data for ${poolAddress} on ${pool.chain}`)
         INITIAL_SUPPLY_STATES[poolAddress] = BigInt(0);
         INITIAL_USER_STATES[poolAddress] = new Map();
 
         const _users = INITIAL_USER_STATES[poolAddress]
 
-        let logs = (await axios.get(
-            explorerUrls[pool.chain] +
-            '?module=logs&action=getLogs' +
-            `&fromBlock=${pool.createdBlock}` +
-            `&toBlock=${pool.startedBlock}` +
-            `&address=${poolAddress}` +
-            `&topic0=${TRANSFER_HASH}` +
-            (pool.chain === 'eth' ? `&apikey=${etherscanApiKey}` : '')
-        )).data.result
+        let logs = []
 
-        if (typeof logs === 'string' && logs.includes('Max rate limit reached')) {
-            await new Promise((resolve) => setTimeout(resolve, 1_000));
+        try {
             logs = (await axios.get(
                 explorerUrls[pool.chain] +
                 '?module=logs&action=getLogs' +
                 `&fromBlock=${pool.createdBlock}` +
                 `&toBlock=${pool.startedBlock}` +
                 `&address=${poolAddress}` +
-                `&topic0=${TRANSFER_HASH}`
+                `&topic0=${TRANSFER_HASH}` +
+                (pool.chain === 'eth' ? `&apikey=${etherscanApiKey}` : '')
             )).data.result
+        } catch (e) {
+            dataStore.setError(`Failed to fetch data for ${poolAddress} on ${POOLS[poolAddress].chain}`)
         }
 
         logs.forEach(l => {
@@ -182,8 +188,16 @@ async function fetchDistributionData() {
             (POOLS[poolAddress].chain === 'eth' ? `&apikey=${etherscanApiKey}`: '')
     ))
 
-    const respArray = await Promise.all(promises)
-    const logs = _.flatten(respArray.map(r => r.data.result))
+    const respArray = []
+
+    for (const promise of promises) {
+        const address = _.keys(POOLS)[respArray.length]
+        const { chain } = POOLS[address]
+        dataStore.setStage(`Fetching distribution data for ${address} on ${chain}`)
+        respArray.push(await promise)
+    }
+
+    const logs = _.flatten(respArray.map(r => r && r.data && r.data.result ? r.data.result :  []))
         .sort((a, b) => {
             if (a.timeStamp > b.timeStamp) {
                 return 1
