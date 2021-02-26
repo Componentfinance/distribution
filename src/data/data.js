@@ -61,13 +61,15 @@ const POOLS = {
         createdBlock: 11_759_920,
         chain: 'eth',
     },
-    '0x53De001bbfAe8cEcBbD6245817512F8DBd8EEF18': {
-        startedBlock: 14_511_611,
-        startedTime: 1613137575,
-        createdBlock: 14_498_740,
-        chain: 'xdai',
-    },
+    // '0x53De001bbfAe8cEcBbD6245817512F8DBd8EEF18': {
+    //     startedBlock: 14_511_611,
+    //     startedTime: 1613137575,
+    //     createdBlock: 14_498_740,
+    //     chain: 'xdai',
+    // },
 }
+
+const xdaiIncluded = _.values(POOLS).find(({ chain }) => chain === 'xdai')
 
 const ZERO_ADDRESS = '0x' + '0'.repeat(40)
 const USER_STATES = new Map()
@@ -175,8 +177,11 @@ async function fetchDistributionData() {
 
     const currentBlocks = {
         eth: await ethWeb3.eth.getBlockNumber(),
-        xdai: await xdaiWeb3.eth.getBlockNumber()
-    };
+    }
+
+    if (xdaiIncluded) {
+        currentBlocks.xdai = await xdaiWeb3.eth.getBlockNumber()
+    }
 
     const promises = _.keys(POOLS).map(poolAddress =>
         axios.get(explorerUrls[POOLS[poolAddress].chain] +
@@ -377,11 +382,13 @@ function subcribeToEvents() {
             finalize(event.timestamp)
         }
     })
-    xdaiWeb3.eth.subscribe("newBlockHeaders", (error, event) => {
-        if (!error) {
-            finalize(event.timestamp)
-        }
-    })
+    if (xdaiIncluded) {
+        xdaiWeb3.eth.subscribe("newBlockHeaders", (error, event) => {
+            if (!error) {
+                finalize(event.timestamp)
+            }
+        })
+    }
     _.keys(POOLS).forEach(poolAddress => {
         const web3 = POOLS[poolAddress].chain === 'eth' ? ethWeb3 : xdaiWeb3
         web3.eth.subscribe('logs', {
