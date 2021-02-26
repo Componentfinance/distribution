@@ -194,8 +194,15 @@ async function fetchDistributionData() {
         const address = _.keys(POOLS)[respArray.length]
         const { chain } = POOLS[address]
         dataStore.setStage(`Fetching distribution data for ${address} on ${chain}`)
-        respArray.push(await promise)
+        try {
+            const resp = await promise
+            respArray.push(resp)
+        } catch (e) {
+            dataStore.setError(`Failed to fetch data for ${address} on ${chain}`)
+        }
     }
+
+    dataStore.setStage(`Calculating`)
 
     const logs = _.flatten(respArray.map(r => r && r.data && r.data.result ? r.data.result :  []))
         .sort((a, b) => {
