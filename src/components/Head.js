@@ -36,7 +36,7 @@ const StyledLogoText = styled(Text)`
 `
 
 export const Head = () => {
-    const blockNumber = useSubject(dataStore.blockNumber)
+    const time = useSubject(dataStore.time)
     return (
         <StyledHeader pad={{'vertical': 'medium', 'horizontal': 'small'}}>
             <Box direction="row" align="center">
@@ -46,7 +46,7 @@ export const Head = () => {
             <StyledNav direction="row">
                 <Anchor style={{textDecoration: 'underline', color: 'rgb(255, 66, 161)'}} label={`Mint USDP`} href="https://unit.xyz" target="_blank"/>
                 <Anchor style={{textDecoration: 'underline', color: 'rgb(255, 66, 161)'}} label={`Add liquidity`} href="https://component.finance" target="_blank"/>
-                <Anchor color="primary" label={`Synced at block #${blockNumber || 'fetching'}`}/>
+                <Anchor color="primary" label={`Synced at #${time || 'fetching'}`}/>
             </StyledNav>
         </StyledHeader>
     )

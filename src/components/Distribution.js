@@ -74,7 +74,13 @@ export const Distribution = () => {
 
 
     if (!balances.length) {
-        return <Spinner />
+        return (
+
+            <Box align='center' style={{margin: '0 auto'}}>
+                <span style={{marginBottom:'20px'}}>Fetching data, please wait ~1 min</span>
+                <Spinner/>
+            </Box>
+        )
     }
 
     return (

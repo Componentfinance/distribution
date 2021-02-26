@@ -1,26 +1,34 @@
 /* global BigInt */
 import _ from 'lodash'
 import * as Web3 from 'web3'
+import * as axios from 'axios'
 import TimeWeightedBalance, { NUMERATOR } from "./TimeWeightedBalance";
 
 import { BehaviorSubject } from 'rxjs'
 
 const isDev = process.env.NODE_ENV === 'development'
-const apiKey = isDev ? 'db72eb2275564c62bfa71896870d8975' : '3c3dfdec6ce94abc935977aa995d1a8c'
-export const web3 = new Web3(`wss://mainnet.infura.io/ws/v3/${apiKey}`)
+const infuraApiKey = isDev ? 'db72eb2275564c62bfa71896870d8975' : '3c3dfdec6ce94abc935977aa995d1a8c'
+const etherscanApiKey = isDev ? 'RXHBEC6SBU7UJIR8YFJMVFFJ432U8PAX62' : 'RXHBEC6SBU7UJIR8YFJMVFFJ432U8PAX62'
+export const ethWeb3 = new Web3(`wss://mainnet.infura.io/ws/v3/${infuraApiKey}`)
+export const xdaiWeb3 = new Web3(`wss://little-wispy-sun.xdai.quiknode.pro/b3fea81156c1abb58de12e3819e9de382216c99c/`)
 const animals = ['🦆', '🐱', '🦁', '🦕', '🦍', '🦄', '🐊', '🐸', '🐛', '🐜', '🦐', '🦋', '🪰', '🪱', '🌱', '☃️', '🪨'];
+
+const explorerUrls = {
+    eth: 'https://api.etherscan.io/api',
+    xdai: 'https://blockscout.com/poa/xdai/api'
+}
 
 const dataStore = {
     distribution: new BehaviorSubject([]),
     totalStake: new BehaviorSubject(BigInt(1)),
-    blockNumber: new BehaviorSubject(''),
+    time: new BehaviorSubject(''),
 
     setBalances(balances) {
         dataStore.distribution.next(balances)
     },
 
-    setBlockNumber(blockNumber) {
-        dataStore.blockNumber.next(blockNumber)
+    setTime(time) {
+        dataStore.time.next(time)
     },
 
     setTotalStake(amount) {
@@ -28,33 +36,42 @@ const dataStore = {
     },
 }
 
-const TRANSFER_HASH = web3.utils.sha3('Transfer(address,address,uint256)');
+const TRANSFER_HASH = ethWeb3.utils.sha3('Transfer(address,address,uint256)');
 
 const POOLS = {
     '0x49519631b404e06ca79c9c7b0dc91648d86f08db': {
         startedBlock: 11_731_951,
+        startedTime: 1611672647,
         createdBlock: 11_717_846,
+        chain: 'eth',
     },
     '0x6477960dd932d29518d7e8087d5ea3d11e606068': {
         startedBlock: 11_772_123,
+        startedTime: 1612206361,
         createdBlock: 11_759_920,
+        chain: 'eth',
+    },
+    '0x53De001bbfAe8cEcBbD6245817512F8DBd8EEF18': {
+        startedBlock: 14_511_611,
+        startedTime: 1613137575,
+        createdBlock: 14_498_740,
+        chain: 'xdai',
     },
 }
 
 const ZERO_ADDRESS = '0x' + '0'.repeat(40)
 const USER_STATES = new Map()
-const STAKING_STARTED_AT_BLOCK = Math.min(..._.values(POOLS).map(({ startedBlock }) => startedBlock))
-const TOTAL_SUPPLY = new TimeWeightedBalance(BigInt(0), STAKING_STARTED_AT_BLOCK);
+const STAKING_STARTED_TIMESTAMP = Math.min(..._.values(POOLS).map(({ startedTime }) => startedTime))
+const TOTAL_SUPPLY = new TimeWeightedBalance(BigInt(0), STAKING_STARTED_TIMESTAMP);
 const INITIAL_SUPPLY_STATES = {}
 const INITIAL_USER_STATES = {}
 
 const initialize = () => _.once(async () => {
-    console.time('distr')
-    const currentBlockNumber = await web3.eth.getBlockNumber();
+    console.time('loading time')
     await fetchInitialData();
-    await fetchDistributionData(currentBlockNumber);
+    await fetchDistributionData();
     dataStore.setTotalStake(TOTAL_SUPPLY.current)
-    console.timeEnd('distr')
+    console.timeEnd('loading time')
     subcribeToEvents()
 })()
 
@@ -66,13 +83,27 @@ async function fetchInitialData() {
 
         const _users = INITIAL_USER_STATES[poolAddress]
 
-        const logs = await web3.eth.getPastLogs({
-            fromBlock: pool.createdBlock,
-            toBlock: pool.startedBlock,
-            address: poolAddress,
-            topics: [TRANSFER_HASH]
-        })
+        let logs = (await axios.get(
+            explorerUrls[pool.chain] +
+            '?module=logs&action=getLogs' +
+            `&fromBlock=${pool.createdBlock}` +
+            `&toBlock=${pool.startedBlock}` +
+            `&address=${poolAddress}` +
+            `&topic0=${TRANSFER_HASH}` +
+            (pool.chain === 'eth' ? `&apikey=${etherscanApiKey}` : '')
+        )).data.result
 
+        if (typeof logs === 'string' && logs.includes('Max rate limit reached')) {
+            await new Promise((resolve) => setTimeout(resolve, 1_000));
+            logs = (await axios.get(
+                explorerUrls[pool.chain] +
+                '?module=logs&action=getLogs' +
+                `&fromBlock=${pool.createdBlock}` +
+                `&toBlock=${pool.startedBlock}` +
+                `&address=${poolAddress}` +
+                `&topic0=${TRANSFER_HASH}`
+            )).data.result
+        }
 
         logs.forEach(l => {
 
@@ -128,28 +159,36 @@ async function fetchInitialData() {
     TOTAL_SUPPLY._add(INITIAL_SUPPLY_STATES[initialPoolAddress])
     delete INITIAL_SUPPLY_STATES[initialPoolAddress]
     for (const userAddress of Array.from(INITIAL_USER_STATES[initialPoolAddress].keys())) {
-        USER_STATES.set(userAddress, new TimeWeightedBalance(INITIAL_USER_STATES[initialPoolAddress].get(userAddress), POOLS[initialPoolAddress].startedBlock))
+        USER_STATES.set(userAddress, new TimeWeightedBalance(INITIAL_USER_STATES[initialPoolAddress].get(userAddress), POOLS[initialPoolAddress].startedTime))
         INITIAL_USER_STATES[initialPoolAddress].delete(userAddress)
     }
     delete INITIAL_USER_STATES[initialPoolAddress]
 }
 
-async function fetchDistributionData(endBlockNumber) {
+async function fetchDistributionData() {
 
-    const promises = _.keys(POOLS).map(poolAddress => web3.eth.getPastLogs({
-        fromBlock: POOLS[poolAddress].startedBlock,
-        toBlock: endBlockNumber,
-        address: poolAddress,
-        topics: [TRANSFER_HASH]
-    }))
+    const currentBlocks = {
+        eth: await ethWeb3.eth.getBlockNumber(),
+        xdai: await xdaiWeb3.eth.getBlockNumber()
+    };
 
+    const promises = _.keys(POOLS).map(poolAddress =>
+        axios.get(explorerUrls[POOLS[poolAddress].chain] +
+            '?module=logs&action=getLogs' +
+            `&fromBlock=${POOLS[poolAddress].startedBlock}` +
+            `&toBlock=${currentBlocks[POOLS[poolAddress].chain]}` +
+            `&address=${poolAddress}` +
+            `&topic0=${TRANSFER_HASH}`+
+            (POOLS[poolAddress].chain === 'eth' ? `&apikey=${etherscanApiKey}`: '')
+    ))
 
-    const logs = _.flatten(await Promise.all(promises))
+    const respArray = await Promise.all(promises)
+    const logs = _.flatten(respArray.map(r => r.data.result))
         .sort((a, b) => {
-            if (a.blockNumber > b.blockNumber) {
+            if (a.timeStamp > b.timeStamp) {
                 return 1
             }
-            if (a.blockNumber < b.blockNumber) {
+            if (a.timeStamp < b.timeStamp) {
                 return -1
             }
             if (a.logIndex > b.logIndex) {
@@ -161,15 +200,17 @@ async function fetchDistributionData(endBlockNumber) {
             throw new Error("Impossible case: the same logIndex")
         });
 
-    logs.forEach(l => applyLog(l))
+    logs.forEach(l => {
+        applyLog(l)
+    })
 
-    finalize(endBlockNumber)
+    finalize((await ethWeb3.eth.getBlock(currentBlocks.eth)).timestamp)
 
 }
 
-function finalize(endBlockNumber) {
+function finalize(endTime) {
 
-    const balances = calculateDistribution(endBlockNumber)
+    const balances = calculateDistribution(endTime)
 
     dataStore.setBalances(
         balances.map(
@@ -180,20 +221,20 @@ function finalize(endBlockNumber) {
         )
     )
 
-    dataStore.setBlockNumber(endBlockNumber)
+    dataStore.setTime(endTime)
 
 }
 
-function calculateDistribution(endBlock) {
+function calculateDistribution(endTime) {
 
-    const proportionTimeTotal = BigInt(endBlock - STAKING_STARTED_AT_BLOCK) * NUMERATOR
+    const proportionTimeTotal = BigInt(endTime - STAKING_STARTED_TIMESTAMP) * NUMERATOR
 
     const supply = TOTAL_SUPPLY.current
 
     return Array.from(USER_STATES.entries()).map(([addr, bal]) => ({
         address: addr,
         currentStake: bal.current,
-        distributionPercent: (Number(bal.finalize(endBlock, supply) * BigInt(1_000_000) / proportionTimeTotal) / 10000),
+        distributionPercent: (Number(bal.finalize(endTime, supply) * BigInt(1_000_000) / proportionTimeTotal) / 10000),
     })).sort(({ distributionPercent: a }, { distributionPercent: b }) => {
         if (a < b) return 1
         if (a > b) return -1
@@ -205,18 +246,18 @@ function applyLog(log) {
     const from = `0x${log.topics[1].substr(26)}`
     const to = `0x${log.topics[2].substr(26)}`
     const amount = BigInt(log.data)
-    const now = log.blockNumber
+    const now = log.timeStamp
 
     for (const uninitializedPoolAddress in INITIAL_SUPPLY_STATES) {
 
-        const { startedBlock } = POOLS[uninitializedPoolAddress]
+        const { startedTime } = POOLS[uninitializedPoolAddress]
 
-        if (now > startedBlock) {
+        if (now > startedTime) {
 
             const prevSupply = TOTAL_SUPPLY.current
 
             // apply pool initial state
-            mint(INITIAL_SUPPLY_STATES[uninitializedPoolAddress], startedBlock)
+            mint(INITIAL_SUPPLY_STATES[uninitializedPoolAddress], startedTime)
 
             const excludeAddresses = []
 
@@ -226,7 +267,7 @@ function applyLog(log) {
                 if (toUser) {
                     toUser.add(amount, now, prevSupply)
                 } else {
-                    USER_STATES.set(userAddress, new TimeWeightedBalance(amount, startedBlock))
+                    USER_STATES.set(userAddress, new TimeWeightedBalance(amount, startedTime))
                 }
                 INITIAL_USER_STATES[uninitializedPoolAddress].delete(userAddress)
                 excludeAddresses.push(userAddress)
@@ -234,7 +275,7 @@ function applyLog(log) {
 
             delete INITIAL_SUPPLY_STATES[uninitializedPoolAddress]
             delete INITIAL_USER_STATES[uninitializedPoolAddress]
-            rebalance(prevSupply, startedBlock, excludeAddresses)
+            rebalance(prevSupply, startedTime, excludeAddresses)
         }
 
     }
@@ -280,7 +321,7 @@ function applyLog(log) {
         if (toUser) {
             toUser.add(amount, now, prevSupply)
         } else {
-            USER_STATES.set(to, new TimeWeightedBalance(amount, log.blockNumber))
+            USER_STATES.set(to, new TimeWeightedBalance(amount, now))
         }
 
     }
@@ -310,24 +351,31 @@ function mint(amount, now) {
 initialize()
 
 function subcribeToEvents() {
-    web3.eth.subscribe("newBlockHeaders", (error, event) => {
+    ethWeb3.eth.subscribe("newBlockHeaders", (error, event) => {
         if (!error) {
-            finalize(event.number)
+            finalize(event.timestamp)
         }
     })
-    _.keys(POOLS).forEach(poolAddress =>
-    web3.eth.subscribe('logs', {
-        address: poolAddress,
-        topics: [TRANSFER_HASH]
-    }, (error, log ) => {
+    xdaiWeb3.eth.subscribe("newBlockHeaders", (error, event) => {
         if (!error) {
-            applyLog(log)
-            finalize(log.blockNumber)
+            finalize(event.timestamp)
         }
-    }))
+    })
+    _.keys(POOLS).forEach(poolAddress => {
+        const web3 = POOLS[poolAddress].chain === 'eth' ? ethWeb3 : xdaiWeb3
+        web3.eth.subscribe('logs', {
+            address: poolAddress,
+            topics: [TRANSFER_HASH]
+        }, async (error, log ) => {
+            if (!error) {
+                const block = await web3.eth.getBlock(log.blockNumber)
+                log.time = block.timestamp
+                applyLog(log)
+                finalize(block.timestamp)
+            }
+        })
+    })
 }
 
 
 export default dataStore
-
-
