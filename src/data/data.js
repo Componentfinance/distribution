@@ -100,7 +100,8 @@ async function fetchInitialData() {
         let logs = []
 
         try {
-            logs = (await axios.get(
+
+            let logArray = (await axios.get(
                 explorerUrls[pool.chain] +
                 '?module=logs&action=getLogs' +
                 `&fromBlock=${pool.createdBlock}` +
@@ -109,6 +110,27 @@ async function fetchInitialData() {
                 `&topic0=${TRANSFER_HASH}` +
                 (pool.chain === 'eth' ? `&apikey=${etherscanApiKey}` : '')
             )).data.result
+
+            logs = logArray
+
+            while (logArray.length === 1_000) {
+
+                // let's say we are not missing anything
+                const fromBlock = +logs[999].blockNumber + 1
+
+                logArray = (await axios.get(
+                    explorerUrls[pool.chain] +
+                    '?module=logs&action=getLogs' +
+                    `&fromBlock=${fromBlock}` +
+                    `&toBlock=${pool.startedBlock}` +
+                    `&address=${poolAddress}` +
+                    `&topic0=${TRANSFER_HASH}` +
+                    (pool.chain === 'eth' ? `&apikey=${etherscanApiKey}` : '')
+                )).data.result;
+
+                logs = logs.concat(logArray);
+            }
+
         } catch (e) {
             dataStore.setError(`Failed to fetch data for ${poolAddress} on ${POOLS[poolAddress].chain}`)
         }
@@ -200,8 +222,28 @@ async function fetchDistributionData() {
         const { chain } = POOLS[address]
         dataStore.setStage(`Fetching distribution data for ${address} on ${chain}`)
         try {
-            const resp = await promise
-            respArray.push(resp)
+            let resp = (await promise).data.result
+
+            let logs = resp
+
+            while (resp.length === 1_000) {
+                // let's say we are not missing anything
+                const fromBlock = +resp[999].blockNumber + 1
+
+                resp = (await axios.get(
+                    explorerUrls[chain] +
+                    '?module=logs&action=getLogs' +
+                    `&fromBlock=${fromBlock}` +
+                    `&toBlock=${currentBlocks[chain]}` +
+                    `&address=${address}` +
+                    `&topic0=${TRANSFER_HASH}` +
+                    (chain === 'eth' ? `&apikey=${etherscanApiKey}` : '')
+                )).data.result;
+
+                logs = logs.concat(resp);
+            }
+
+            respArray.push(logs)
         } catch (e) {
             dataStore.setError(`Failed to fetch data for ${address} on ${chain}`)
         }
@@ -209,7 +251,7 @@ async function fetchDistributionData() {
 
     dataStore.setStage(`Calculating`)
 
-    const logs = _.flatten(respArray.map(r => r && r.data && r.data.result ? r.data.result :  []))
+    const logs = _.flatten(respArray)
         .sort((a, b) => {
             if (a.timeStamp > b.timeStamp) {
                 return 1
