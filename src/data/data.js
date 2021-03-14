@@ -2,20 +2,25 @@
 import _ from 'lodash'
 import * as Web3 from 'web3'
 import * as axios from 'axios'
-import TimeWeightedBalance, { NUMERATOR } from "./TimeWeightedBalance";
+import TimeWeightedBalance, { NUMERATOR } from "./TimeWeightedBalance"
 
 import { BehaviorSubject } from 'rxjs'
 
-const isDev = process.env.NODE_ENV === 'development'
-const infuraApiKey = isDev ? 'db72eb2275564c62bfa71896870d8975' : '3c3dfdec6ce94abc935977aa995d1a8c'
-const etherscanApiKey = isDev ? 'RXHBEC6SBU7UJIR8YFJMVFFJ432U8PAX62' : 'RXHBEC6SBU7UJIR8YFJMVFFJ432U8PAX62'
+const infuraApiKey = process.env.REACT_APP_INFURA_API_KEY
+
+const explorerApiKeys = {
+    eth: process.env.REACT_APP_ETHERSCAN_API_KEY,
+    bsc: process.env.REACT_APP_BSCSCAN_API_KEY,
+}
 export const ethWeb3 = new Web3(`wss://mainnet.infura.io/ws/v3/${infuraApiKey}`)
-export const xdaiWeb3 = new Web3(`wss://little-wispy-sun.xdai.quiknode.pro/b3fea81156c1abb58de12e3819e9de382216c99c/`)
+export const xdaiWeb3 = new Web3(process.env.REACT_APP_XDAI_WS)
+export const bscWeb3 = new Web3(process.env.REACT_APP_BSC_WS)
 const animals = ['🦆', '🐱', '🦁', '🦕', '🦍', '🦄', '🐊', '🐸', '🐛', '🐜', '🦐', '🦋', '🪰', '🪱', '🌱', '☃️', '🪨'];
 
 const explorerUrls = {
     eth: 'https://api.etherscan.io/api',
-    xdai: 'https://blockscout.com/poa/xdai/api'
+    xdai: 'https://blockscout.com/poa/xdai/api',
+    bsc: 'https://api.bscscan.com/api'
 }
 
 const dataStore = {
@@ -61,6 +66,12 @@ const POOLS = {
         createdBlock: 11_759_920,
         chain: 'eth',
     },
+    '0xcf76a0cedf50da184fdef08a9d04e6829d7fefdf': {
+        startedBlock: 5_625_366,
+        startedTime: 1615580958,
+        createdBlock: 5_616_877,
+        chain: 'bsc',
+    },
     // '0x53De001bbfAe8cEcBbD6245817512F8DBd8EEF18': {
     //     startedBlock: 14_511_611,
     //     startedTime: 1613137575,
@@ -101,15 +112,14 @@ async function fetchInitialData() {
 
         try {
 
-            let logArray = (await axios.get(
-                explorerUrls[pool.chain] +
+            const url = explorerUrls[pool.chain] +
                 '?module=logs&action=getLogs' +
                 `&fromBlock=${pool.createdBlock}` +
                 `&toBlock=${pool.startedBlock}` +
                 `&address=${poolAddress}` +
                 `&topic0=${TRANSFER_HASH}` +
-                (pool.chain === 'eth' ? `&apikey=${etherscanApiKey}` : '')
-            )).data.result
+                (explorerApiKeys[pool.chain] ? `&apikey=${explorerApiKeys[pool.chain]}` : '')
+            let logArray = (await axios.get(url)).data.result
 
             logs = logArray
 
@@ -125,7 +135,7 @@ async function fetchInitialData() {
                     `&toBlock=${pool.startedBlock}` +
                     `&address=${poolAddress}` +
                     `&topic0=${TRANSFER_HASH}` +
-                    (pool.chain === 'eth' ? `&apikey=${etherscanApiKey}` : '')
+                    (explorerApiKeys[pool.chain] ? `&apikey=${explorerApiKeys[pool.chain]}` : '')
                 )).data.result;
 
                 logs = logs.concat(logArray);
@@ -199,21 +209,23 @@ async function fetchDistributionData() {
 
     const currentBlocks = {
         eth: await ethWeb3.eth.getBlockNumber(),
+        bsc: await bscWeb3.eth.getBlockNumber(),
     }
 
     if (xdaiIncluded) {
         currentBlocks.xdai = await xdaiWeb3.eth.getBlockNumber()
     }
 
-    const promises = _.keys(POOLS).map(poolAddress =>
-        axios.get(explorerUrls[POOLS[poolAddress].chain] +
+    const promises = _.keys(POOLS).map(poolAddress => {
+        const { chain, startedBlock } = POOLS[poolAddress]
+        return axios.get(explorerUrls[POOLS[poolAddress].chain] +
             '?module=logs&action=getLogs' +
-            `&fromBlock=${POOLS[poolAddress].startedBlock}` +
-            `&toBlock=${currentBlocks[POOLS[poolAddress].chain]}` +
+            `&fromBlock=${startedBlock}` +
+            `&toBlock=${currentBlocks[chain]}` +
             `&address=${poolAddress}` +
             `&topic0=${TRANSFER_HASH}`+
-            (POOLS[poolAddress].chain === 'eth' ? `&apikey=${etherscanApiKey}`: '')
-    ))
+            (explorerApiKeys[chain] ? `&apikey=${explorerApiKeys[chain]}` : '')
+    )})
 
     const respArray = []
 
@@ -237,7 +249,7 @@ async function fetchDistributionData() {
                     `&toBlock=${currentBlocks[chain]}` +
                     `&address=${address}` +
                     `&topic0=${TRANSFER_HASH}` +
-                    (chain === 'eth' ? `&apikey=${etherscanApiKey}` : '')
+                    (explorerApiKeys[chain] ? `&apikey=${explorerApiKeys[chain]}` : '')
                 )).data.result;
 
                 logs = logs.concat(resp);
@@ -432,7 +444,8 @@ function subcribeToEvents() {
         })
     }
     _.keys(POOLS).forEach(poolAddress => {
-        const web3 = POOLS[poolAddress].chain === 'eth' ? ethWeb3 : xdaiWeb3
+        const { chain } = POOLS[poolAddress]
+        const web3 = chain === 'eth' ? ethWeb3 : (chain === 'bsc' ? bscWeb3 : xdaiWeb3)
         web3.eth.subscribe('logs', {
             address: poolAddress,
             topics: [TRANSFER_HASH]
