@@ -72,12 +72,12 @@ const POOLS = {
         createdBlock: 5_616_877,
         chain: 'bsc',
     },
-    // '0x53De001bbfAe8cEcBbD6245817512F8DBd8EEF18': {
-    //     startedBlock: 14_511_611,
-    //     startedTime: 1613137575,
-    //     createdBlock: 14_498_740,
-    //     chain: 'xdai',
-    // },
+    '0x53De001bbfAe8cEcBbD6245817512F8DBd8EEF18': {
+        startedBlock: 14_511_611,
+        startedTime: 1613137575,
+        createdBlock: 14_498_740,
+        chain: 'xdai',
+    },
 }
 
 const xdaiIncluded = _.values(POOLS).find(({ chain }) => chain === 'xdai')
@@ -436,13 +436,6 @@ function subcribeToEvents() {
             finalize(event.timestamp)
         }
     })
-    if (xdaiIncluded) {
-        xdaiWeb3.eth.subscribe("newBlockHeaders", (error, event) => {
-            if (!error) {
-                finalize(event.timestamp)
-            }
-        })
-    }
     _.keys(POOLS).forEach(poolAddress => {
         const { chain } = POOLS[poolAddress]
         const web3 = chain === 'eth' ? ethWeb3 : (chain === 'bsc' ? bscWeb3 : xdaiWeb3)
