@@ -328,6 +328,8 @@ function applyLog(log) {
     const amount = BigInt(log.data)
     const now = log.timeStamp
 
+    if (amount === BigInt(0)) return
+
     for (const uninitializedPoolAddress in INITIAL_SUPPLY_STATES) {
 
         const { startedTime } = POOLS[uninitializedPoolAddress]
