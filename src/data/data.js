@@ -17,6 +17,11 @@ export const xdaiWeb3 = new Web3(process.env.REACT_APP_XDAI_WS)
 export const bscWeb3 = new Web3(process.env.REACT_APP_BSC_WS)
 const animals = ['🦆', '🐱', '🦁', '🦕', '🦍', '🦄', '🐊', '🐸', '🐛', '🐜', '🦐', '🦋', '🪰', '🪱', '🌱', '☃️', '🪨'];
 
+const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+const timeout = (p) => Promise.race([p, wait(30_000).then(() => {
+    throw new Error("Timeout");
+})]);
+
 const explorerUrls = {
     eth: 'https://api.etherscan.io/api',
     xdai: 'https://blockscout.com/poa/xdai/api',
@@ -72,12 +77,12 @@ const POOLS = {
         createdBlock: 5_616_877,
         chain: 'bsc',
     },
-    // '0x53De001bbfAe8cEcBbD6245817512F8DBd8EEF18': {
-    //     startedBlock: 14_511_611,
-    //     startedTime: 1613137575,
-    //     createdBlock: 14_498_740,
-    //     chain: 'xdai',
-    // },
+    '0x53De001bbfAe8cEcBbD6245817512F8DBd8EEF18': {
+        startedBlock: 14_511_611,
+        startedTime: 1613137575,
+        createdBlock: 14_498_740,
+        chain: 'xdai',
+    },
 }
 
 const xdaiIncluded = _.values(POOLS).find(({ chain }) => chain === 'xdai')
@@ -119,7 +124,7 @@ async function fetchInitialData() {
                 `&address=${poolAddress}` +
                 `&topic0=${TRANSFER_HASH}` +
                 (explorerApiKeys[pool.chain] ? `&apikey=${explorerApiKeys[pool.chain]}` : '')
-            let logArray = (await axios.get(url)).data.result
+            let logArray = (await timeout(axios.get(url))).data.result
 
             logs = logArray
 
@@ -128,7 +133,7 @@ async function fetchInitialData() {
                 // let's say we are not missing anything
                 const fromBlock = +logs[999].blockNumber + 1
 
-                logArray = (await axios.get(
+                logArray = (await timeout(axios.get(
                     explorerUrls[pool.chain] +
                     '?module=logs&action=getLogs' +
                     `&fromBlock=${fromBlock}` +
@@ -136,7 +141,7 @@ async function fetchInitialData() {
                     `&address=${poolAddress}` +
                     `&topic0=${TRANSFER_HASH}` +
                     (explorerApiKeys[pool.chain] ? `&apikey=${explorerApiKeys[pool.chain]}` : '')
-                )).data.result;
+                ))).data.result;
 
                 logs = logs.concat(logArray);
             }
@@ -234,7 +239,8 @@ async function fetchDistributionData() {
         const { chain } = POOLS[address]
         dataStore.setStage(`Fetching distribution data for ${address} on ${chain}`)
         try {
-            let resp = (await promise).data.result
+
+            let resp = (await timeout(promise)).data.result
 
             let logs = resp
 
@@ -242,15 +248,17 @@ async function fetchDistributionData() {
                 // let's say we are not missing anything
                 const fromBlock = +resp[999].blockNumber + 1
 
-                resp = (await axios.get(
-                    explorerUrls[chain] +
+                const url = explorerUrls[chain] +
                     '?module=logs&action=getLogs' +
                     `&fromBlock=${fromBlock}` +
                     `&toBlock=${currentBlocks[chain]}` +
                     `&address=${address}` +
                     `&topic0=${TRANSFER_HASH}` +
                     (explorerApiKeys[chain] ? `&apikey=${explorerApiKeys[chain]}` : '')
-                )).data.result;
+
+                const res = await timeout(axios.get(url))
+
+                resp = res.data.result;
 
                 logs = logs.concat(resp);
             }
