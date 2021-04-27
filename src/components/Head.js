@@ -1,7 +1,5 @@
 import {Anchor, Avatar, Box, Header, Nav, Text} from 'grommet';
 import React from "react";
-import useSubject from "../data/useSubject";
-import dataStore from "../data/data";
 import styled from 'styled-components';
 
 const logo =`${process.env.PUBLIC_URL}/component.png`;
@@ -36,8 +34,6 @@ const StyledLogoText = styled(Text)`
 `
 
 export const Head = () => {
-    const time = useSubject(dataStore.time)
-    const timeString = time ?  new Date(time * 1000).toLocaleString() : '...'
     return (
         <StyledHeader pad={{'vertical': 'medium', 'horizontal': 'small'}}>
             <Box direction="row" align="center">
@@ -47,7 +43,7 @@ export const Head = () => {
             <StyledNav direction="row">
                 <Anchor style={{textDecoration: 'underline', color: 'rgb(255, 66, 161)'}} label={`Mint USDP`} href="https://unit.xyz" target="_blank"/>
                 <Anchor style={{textDecoration: 'underline', color: 'rgb(255, 66, 161)'}} label={`Add liquidity`} href="https://component.finance" target="_blank"/>
-                <Anchor color="primary" label={`Synced at ${timeString}`}/>
+                <Anchor color="primary" label={`Distribution completed`}/>
             </StyledNav>
         </StyledHeader>
     )

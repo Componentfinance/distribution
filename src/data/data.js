@@ -13,14 +13,9 @@ const explorerApiKeys = {
     bsc: process.env.REACT_APP_BSCSCAN_API_KEY,
 }
 export const ethWeb3 = new Web3(`wss://mainnet.infura.io/ws/v3/${infuraApiKey}`)
-export const xdaiWeb3 = new Web3(process.env.REACT_APP_XDAI_WS)
+export const xdaiWeb3 = new Web3('https://rpc.xdaichain.com/')
 export const bscWeb3 = new Web3(process.env.REACT_APP_BSC_WS)
 const animals = ['🦆', '🐱', '🦁', '🦕', '🦍', '🦄', '🐊', '🐸', '🐛', '🐜', '🦐', '🦋', '🪰', '🪱', '🌱', '☃️', '🪨'];
-
-const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
-const timeout = (p) => Promise.race([p, wait(30_000).then(() => {
-    throw new Error("Timeout");
-})]);
 
 const explorerUrls = {
     eth: 'https://api.etherscan.io/api',
@@ -94,16 +89,31 @@ const TOTAL_SUPPLY = new TimeWeightedBalance(BigInt(0), STAKING_STARTED_TIMESTAM
 const INITIAL_SUPPLY_STATES = {}
 const INITIAL_USER_STATES = {}
 
+const DISTRIBUTION_END_TIME = 1619522590
+
 const initialize = () => _.once(async () => {
     console.time('loading time')
     await fetchInitialData();
     await fetchDistributionData();
     dataStore.setTotalStake(TOTAL_SUPPLY.current)
     console.timeEnd('loading time')
-    subcribeToEvents()
 })()
 
 async function fetchInitialData() {
+
+    const receives = await xdaiWeb3.eth.getPastLogs({
+        address: '0x53De001bbfAe8cEcBbD6245817512F8DBd8EEF18',
+        topics: [TRANSFER_HASH, [], '0x0000000000000000000000008e370b7419f8d7bcd341a2e0c1c5a666d8ab5b4d'],
+        fromBlock: 14_498_740
+    })
+
+    const sends = await xdaiWeb3.eth.getPastLogs({
+        address: '0x53De001bbfAe8cEcBbD6245817512F8DBd8EEF18',
+        topics: [TRANSFER_HASH, '0x0000000000000000000000008e370b7419f8d7bcd341a2e0c1c5a666d8ab5b4d'],
+        fromBlock: 14_498_740,
+    })
+
+    console.log({ receives, sends })
 
     for (const poolAddress in POOLS) {
         const pool = POOLS[poolAddress]
@@ -124,7 +134,7 @@ async function fetchInitialData() {
                 `&address=${poolAddress}` +
                 `&topic0=${TRANSFER_HASH}` +
                 (explorerApiKeys[pool.chain] ? `&apikey=${explorerApiKeys[pool.chain]}` : '')
-            let logArray = (await timeout(axios.get(url))).data.result
+            let logArray = (await axios.get(url)).data.result
 
             logs = logArray
 
@@ -133,7 +143,7 @@ async function fetchInitialData() {
                 // let's say we are not missing anything
                 const fromBlock = +logs[999].blockNumber + 1
 
-                logArray = (await timeout(axios.get(
+                logArray = (await axios.get(
                     explorerUrls[pool.chain] +
                     '?module=logs&action=getLogs' +
                     `&fromBlock=${fromBlock}` +
@@ -141,7 +151,7 @@ async function fetchInitialData() {
                     `&address=${poolAddress}` +
                     `&topic0=${TRANSFER_HASH}` +
                     (explorerApiKeys[pool.chain] ? `&apikey=${explorerApiKeys[pool.chain]}` : '')
-                ))).data.result;
+                )).data.result;
 
                 logs = logs.concat(logArray);
             }
@@ -155,6 +165,10 @@ async function fetchInitialData() {
             const from = `0x${l.topics[1].substr(26)}`
             const to = `0x${l.topics[2].substr(26)}`
             const amount = BigInt(l.data)
+
+            if ([from, to].includes('0x8e370b7419f8d7bcd341a2e0c1c5a666d8ab5b4d')) {
+                console.log(l)
+            }
 
             if (from === ZERO_ADDRESS) {
 
@@ -212,13 +226,13 @@ async function fetchInitialData() {
 
 async function fetchDistributionData() {
 
-    const currentBlocks = {
-        eth: await ethWeb3.eth.getBlockNumber(),
-        bsc: await bscWeb3.eth.getBlockNumber(),
+    const endBlocks = {
+        eth: 12322099,
+        bsc: 6928593,
     }
 
     if (xdaiIncluded) {
-        currentBlocks.xdai = await xdaiWeb3.eth.getBlockNumber()
+        endBlocks.xdai = 15756907
     }
 
     const promises = _.keys(POOLS).map(poolAddress => {
@@ -226,7 +240,7 @@ async function fetchDistributionData() {
         return axios.get(explorerUrls[POOLS[poolAddress].chain] +
             '?module=logs&action=getLogs' +
             `&fromBlock=${startedBlock}` +
-            `&toBlock=${currentBlocks[chain]}` +
+            `&toBlock=${endBlocks[chain]}` +
             `&address=${poolAddress}` +
             `&topic0=${TRANSFER_HASH}`+
             (explorerApiKeys[chain] ? `&apikey=${explorerApiKeys[chain]}` : '')
@@ -239,8 +253,7 @@ async function fetchDistributionData() {
         const { chain } = POOLS[address]
         dataStore.setStage(`Fetching distribution data for ${address} on ${chain}`)
         try {
-
-            let resp = (await timeout(promise)).data.result
+            let resp = (await promise).data.result
 
             let logs = resp
 
@@ -248,17 +261,15 @@ async function fetchDistributionData() {
                 // let's say we are not missing anything
                 const fromBlock = +resp[999].blockNumber + 1
 
-                const url = explorerUrls[chain] +
+                resp = (await axios.get(
+                    explorerUrls[chain] +
                     '?module=logs&action=getLogs' +
                     `&fromBlock=${fromBlock}` +
-                    `&toBlock=${currentBlocks[chain]}` +
+                    `&toBlock=${endBlocks[chain]}` +
                     `&address=${address}` +
                     `&topic0=${TRANSFER_HASH}` +
                     (explorerApiKeys[chain] ? `&apikey=${explorerApiKeys[chain]}` : '')
-
-                const res = await timeout(axios.get(url))
-
-                resp = res.data.result;
+                )).data.result;
 
                 logs = logs.concat(resp);
             }
@@ -292,13 +303,13 @@ async function fetchDistributionData() {
         applyLog(l)
     })
 
-    finalize((await ethWeb3.eth.getBlock(currentBlocks.eth)).timestamp)
+    finalize()
 
 }
 
-function finalize(endTime) {
+function finalize() {
 
-    const balances = calculateDistribution(endTime)
+    const balances = calculateDistribution(DISTRIBUTION_END_TIME)
 
     dataStore.setBalances(
         balances.map(
@@ -309,7 +320,7 @@ function finalize(endTime) {
         )
     )
 
-    dataStore.setTime(endTime)
+    dataStore.setTime(DISTRIBUTION_END_TIME)
 
 }
 
@@ -335,6 +346,11 @@ function applyLog(log) {
     const to = `0x${log.topics[2].substr(26)}`
     const amount = BigInt(log.data)
     const now = log.timeStamp
+
+    if ([from, to].includes('0x8e370b7419f8d7bcd341a2e0c1c5a666d8ab5b4d')) {
+        console.log(log)
+    }
+
 
     if (amount === BigInt(0)) return
 
@@ -439,29 +455,6 @@ function mint(amount, now) {
 }
 
 initialize()
-
-function subcribeToEvents() {
-    ethWeb3.eth.subscribe("newBlockHeaders", (error, event) => {
-        if (!error) {
-            finalize(event.timestamp)
-        }
-    })
-    _.keys(POOLS).forEach(poolAddress => {
-        const { chain } = POOLS[poolAddress]
-        const web3 = chain === 'eth' ? ethWeb3 : (chain === 'bsc' ? bscWeb3 : xdaiWeb3)
-        web3.eth.subscribe('logs', {
-            address: poolAddress,
-            topics: [TRANSFER_HASH]
-        }, async (error, log ) => {
-            if (!error) {
-                const block = await web3.eth.getBlock(log.blockNumber)
-                log.time = block.timestamp
-                applyLog(log)
-                finalize(block.timestamp)
-            }
-        })
-    })
-}
 
 
 export default dataStore
